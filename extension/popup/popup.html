@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Microsoft Rewards 自动助手</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- 头部导航 -->
+    <header class="header">
+      <div class="brand">
+        <div class="logo-icon">🏅</div>
+        <div>
+          <h1 class="title">MS Rewards 助手</h1>
+          <span class="status-pill" id="statusPill">就绪</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <a href="https://rewards.bing.com/" target="_blank" class="link-btn" title="直达微软积分中心">🔗 官网</a>
+      </div>
+    </header>
+
+    <!-- Tab 导航 -->
+    <nav class="nav-tabs">
+      <button class="tab-btn active" data-tab="tabDashboard">控制台</button>
+      <button class="tab-btn" data-tab="tabSettings">参数设置</button>
+      <button class="tab-btn" data-tab="tabLogs">执行日志</button>
+    </nav>
+
+    <!-- TAB 1: 控制台 -->
+    <section id="tabDashboard" class="tab-content active">
+      <!-- 积分卡片 -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">可用总积分</div>
+          <div class="stat-value" id="currentPoints">-</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">本次获取积分</div>
+          <div class="stat-value highlight" id="todayPoints">+0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">连胜天数</div>
+          <div class="stat-value" id="streakDays">0 天</div>
+        </div>
+      </div>
+
+      <!-- 任务进度展示 -->
+      <div class="card progress-card">
+        <div class="card-title">今日任务进度</div>
+        
+        <div class="progress-item">
+          <div class="progress-info">
+            <span>日常任务卡片 & 组合打卡</span>
+            <span id="dailySetText">0 / 0</span>
+          </div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="dailySetProgress" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <div class="progress-item">
+          <div class="progress-info">
+            <span>PC 桌面端搜索 (15次访问)</span>
+            <span id="pcSearchText">0 / 15</span>
+          </div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill" id="pcSearchProgress" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 操作按钮群 -->
+      <div class="actions-group">
+        <button id="btnStartAll" class="btn btn-primary">
+          <span class="btn-icon">⚡</span> 一键开始全部任务
+        </button>
+        <button id="btnStop" class="btn btn-danger" style="display: none;">
+          <span class="btn-icon">🛑</span> 停止任务
+        </button>
+
+        <div class="secondary-actions">
+          <button id="btnOnlyDaily" class="btn btn-outline" title="直接在页面点击并完成全部日常任务卡片">🎯 任务卡片</button>
+          <button id="btnOnlyPc" class="btn btn-outline" title="只做电脑端必应搜索">💻 仅PC搜索</button>
+        </div>
+      </div>
+
+      <!-- 快捷状态提示 -->
+      <div class="latest-log-bar" id="latestLog">
+        准备就绪，点击上方按钮或等待每日定时运行。
+      </div>
+    </section>
+
+    <!-- TAB 2: 参数设置 -->
+    <section id="tabSettings" class="tab-content">
+      <div class="card settings-card">
+        <div class="card-title">⏰ 定时执行设置</div>
+        <div class="form-row">
+          <label class="switch-label">
+            <span>启用每日定时自动打卡</span>
+            <input type="checkbox" id="settingEnableAlarm">
+          </label>
+        </div>
+        <div class="form-row">
+          <label>每日自动运行时间：</label>
+          <input type="time" id="settingAlarmTime" class="input-field" value="08:30">
+        </div>
+      </div>
+
+      <div class="card settings-card">
+        <div class="card-title">🔍 搜索与防风控设置</div>
+        <div class="form-row">
+          <label>PC 桌面端搜索次数：</label>
+          <input type="number" id="settingPcCount" class="input-field" min="0" max="60" value="15">
+        </div>
+
+        <div class="form-row grid-2">
+          <div>
+            <label>最小延迟 (秒)：</label>
+            <input type="number" id="settingMinDelay" class="input-field" min="3" max="30" value="7">
+          </div>
+          <div>
+            <label>最大延迟 (秒)：</label>
+            <input type="number" id="settingMaxDelay" class="input-field" min="5" max="60" value="12">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label>搜索词库语言偏好：</label>
+          <select id="settingSearchLang" class="input-field">
+            <option value="mixed">中英混合真实词库 (推荐)</option>
+            <option value="zh">纯中文真实词库</option>
+            <option value="en">纯英文真实词库</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <label class="switch-label">
+            <span>防风控冷却保护模式 (每4次搜索停顿15分钟，专为被限号用户设计)</span>
+            <input type="checkbox" id="settingCooldownMode">
+          </label>
+        </div>
+      </div>
+
+      <div class="card settings-card">
+        <div class="card-title">🎯 任务项目开关</div>
+        <div class="form-row">
+          <label class="switch-label">
+            <span>完成日常任务卡片与组合打卡 (最高优先级)</span>
+            <input type="checkbox" id="settingEnableDaily" checked>
+          </label>
+        </div>
+        <div class="form-row">
+          <label class="switch-label">
+            <span>完成 PC 桌面搜索</span>
+            <input type="checkbox" id="settingEnablePcSearch" checked>
+          </label>
+        </div>
+        <div class="form-row">
+          <label class="switch-label">
+            <span>完成后弹出系统桌面通知</span>
+            <input type="checkbox" id="settingNotify" checked>
+          </label>
+        </div>
+      </div>
+
+      <div class="actions-group">
+        <button id="btnSaveSettings" class="btn btn-primary">保存设置</button>
+      </div>
+    </section>
+
+    <!-- TAB 3: 执行日志 -->
+    <section id="tabLogs" class="tab-content">
+      <div class="logs-header">
+        <span>实时运行日志</span>
+        <button id="btnClearLogs" class="link-btn">清空日志</button>
+      </div>
+      <div class="logs-console" id="logsConsole">
+        <div class="log-entry info">[系统] 扩展已加载完毕，等待任务开始...</div>
+      </div>
+    </section>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

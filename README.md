@@ -1,2 +1,212 @@
-# MicrosoftAutoRewards
-A simple tool to complete daily Microsoft Rewards tasks.
+# Microsoft Rewards 全自动化打卡助手 (MicrosoftAutoRewards)
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.9+-blue.svg?style=flat-square" alt="Python 3.9+">
+  <img src="https://img.shields.io/badge/Browser-Microsoft%20Edge-0078D7.svg?style=flat-square" alt="Edge">
+  <img src="https://img.shields.io/badge/Engine-Selenium%204-43B02A.svg?style=flat-square" alt="Selenium">
+  <img src="https://img.shields.io/badge/Platform-Windows-0078D4.svg?style=flat-square" alt="Windows">
+  <img src="https://img.shields.io/badge/License-MIT-green.svg?style=flat-square" alt="License">
+</p>
+
+高效、稳定、全自动化的 **Microsoft Rewards** 积分赚取与打卡系统。采用 **原生 Edge WebDriver 驱动 + 底层反检测指纹隐匿 + 真实前台视口与物理鼠标拟真 + Windows 计划任务后台无感静默执行**，免除每日手动繁琐操作。
+
+---
+
+## ✨ 核心特性
+
+- 🎯 **每日活动 (Daily Set) 全自动打卡**：
+  - 自动识别并执行主面板 3 项每日必做任务。
+  - 智能测验 (Quiz)、投票 (Poll)、快速活动求解，官方绿色对勾（✔）精确核验。
+- 📑 **周期任务与多子项打卡 (Earn / Punch Card)**：
+  - 自动深入周期打卡详情页（如“探索九月的时尚、体育、旅行和在线教育创意”）。
+  - 基于真实鼠标动作链 (`ActionChains`) 物理触发【浏览课程】、【浏览】等 CTA 按钮，并辅以全事件 JS 仿真派发。
+  - 前台视口人机拟真滚动与 12 秒积分信标驻留，100% 触发微软发分。
+- 🧩 **滑动拼图自动跳过与求解**：
+  - 自动检测拼图活动页面，智能定位并触发“跳过拼图”，无缝跳转并完成打卡。
+- 🌐 **Edge 浏览器 30 分钟后台静默浏览打卡 (最新支持)**：
+  - 实时读取微软后台打卡进度（如 `5/30 分钟`），已完成则自动跳过。
+  - 自动激活官方打卡信标通道，在丰富百科与新闻内容池中自然翻阅与微滚动。
+  - 动态维持视口焦点与活跃度，即便在后台挂机或玩游戏也不受影响。
+  - 周期性轮询微软服务器记录，达到 30/30 分钟自动优雅收尾。
+- 🔍 **PC 桌面端必应自然搜索 (15次)**：
+  - 内置万条高质量中英文自然百科词库，随机间隔与拟真访问，有效防止风控降频。
+- ⏰ **Windows 计划任务全自动静默托管**：
+  - 无控制台黑框、无弹窗、不抢占鼠标焦点，完全后台静默执行。
+  - 支持 **开机自动补跑机制**：若设定时间电脑处于关机状态，开机登录后立即自动补跑。
+- 🚀 **极简跨电脑移植体验**：
+  - 自动排除本机锁定的缓存文件，代码纯净打包体积小于 1 MB。
+  - 复制到新电脑仅需运行一次配置向导即可永久自动运行。
+- 🧹 **底层防缓存膨胀与瘦身优化**：
+  - 底层限制 Edge 磁盘缓存体积，杜绝自动下载臃肿组件包。
+  - 配套一键瘦身脚本，在 100% 保留登录凭证的前提下深度清理临时垃圾。
+- 🧩 **双模运行：附带 Manifest V3 浏览器扩展**：
+  - 额外提供纯前端浏览器插件（位于 `extension/`），支持在 Edge / Chrome 开发者模式下一键载入。
+
+---
+
+## 📁 项目目录结构
+
+```text
+MicrosoftAutoRewards/
+├── 一键配置新电脑(初次使用).bat  # 新电脑全自动配置向导 (装依赖+登录+定时)
+├── 安装每日定时任务.bat          # 一键注册 Windows 每日静默计划任务
+├── 卸载每日定时任务.bat          # 一键移除 Windows 计划任务
+├── 查看运行日志.bat              # 快速查看打卡日志与积分变动结算
+├── 清理缓存垃圾.bat              # 一键深度清理 Edge 临时垃圾 (保留登录)
+├── 打包移植压缩包.bat            # 一键打包纯净绿色便携包
+├── run.bat                      # 核心交互式控制台菜单
+├── run_task.bat                 # 定时任务静默批处理脚本
+├── silent_run.vbs               # 彻底消除 CMD 弹窗黑框的 VBS 引导器
+├── rewards_runner.py            # 主程序执行入口
+├── requirements.txt             # Python 依赖清单
+├── core/                        # 核心功能模块
+│   ├── browser.py               # Edge 驱动封装与反检测 CDP 注入
+│   ├── dashboard.py             # 每日活动 / 周期打卡执行器与打勾核验
+│   ├── edge_browse.py           # Edge 30分钟静默浏览打卡引擎
+│   ├── searcher.py              # PC 端防风控必应搜索
+│   ├── solvers.py               # 测验、投票与拼图智能求解
+│   └── task_manager.py          # Windows 任务计划管理与缓存清理
+├── data/
+│   └── keywords.py              # 高质量中英文自然搜索词库
+├── extension/                   # 纯净浏览器扩展 (Manifest V3)
+│   ├── manifest.json
+│   ├── background.js
+│   ├── content/
+│   ├── popup/
+│   ├── icons/
+│   └── data/
+└── logs/                        # 自动生成的运行日志目录 (不入库)
+```
+
+---
+
+## 🚀 快速上手
+
+### 💻 方式一：本机直接运行与使用
+
+1. **克隆仓库**：
+   ```bash
+   git clone https://github.com/GZ2z2z/MicrosoftAutoRewards.git
+   cd MicrosoftAutoRewards
+   ```
+
+2. **安装依赖**：
+   ```bash
+   pip install -r requirements.txt
+   ```
+   *注意：系统需安装有 Windows 原生 Microsoft Edge 浏览器。*
+
+3. **初次登录微软账号**：
+   - 双击 `run.bat`，输入选项 `[6]`，在弹出的 Edge 窗口中登录您的微软账号。
+   - 登录成功后直接关闭浏览器即可，登录状态会永久保存在本地独立目录中。
+
+4. **开启每日全自动打卡**：
+   - 双击运行 `安装每日定时任务.bat`，输入希望每天运行的时间（如 `09:00`）。
+   - 从此电脑每天将在后台静默自动完成全部任务，彻底无需人工干预！
+
+---
+
+### 📦 方式二：移植到另一台电脑（极简 3 步）
+
+> [!TIP]
+> Windows 对登录凭据使用本机专有硬件密钥加密（DPAPI），因此跨电脑迁移时仅需登录一次即可永久有效。
+
+1. **打包/复制代码**：
+   - 在已配置电脑上双击 `打包移植压缩包.bat` 生成 `Microsoft_rewards_portable.zip`（不到 100 KB）。
+   - 将压缩包复制到另一台电脑并解压到任意文件夹。
+2. **运行配置向导**：
+   - 双击 `一键配置新电脑(初次使用).bat`。
+   - 脚本将自动检测 Python 环境、自动安装依赖、弹出窗口供登录一次微软账号，并自动配置每日定时任务。
+3. **享受全自动化**：
+   - 配置完成，后续无需打开任何窗口。
+
+---
+
+## 🎮 交互式菜单选项 (`run.bat`)
+
+双击 `run.bat` 时可呼出功能菜单：
+
+```text
+请选择要执行的操作:
+  [1] 一键完成基础打卡 (每日活动 + 15次PC必应搜索) [快速推荐]
+  [2] 仅执行每日活动卡片 (Daily Set 3项 + 更多活动)
+  [3] 仅执行 PC 桌面端必应搜索 (15次自然搜索)
+  [4] 后台静默执行 Edge 30分钟浏览打卡 (赚取打卡积分与印章)
+  [5] 后台静默全自动打卡 (每日活动 + 搜索 + Edge 30分钟浏览) [全托管推荐]
+  [6] 首次登录微软账号 (打开 Edge 窗口供登录并永久保存状态)
+  --------------------------------------------------------
+  [7] 安装/配置 Windows 每日定时打卡任务 (静默自动运行)
+  [8] 卸载 Windows 每日定时打卡任务
+  [9] 清理 Edge 临时缓存垃圾 (深度瘦身，保留登录凭据)
+  [L] 查看运行日志 (积分结算记录)
+  [0] 新电脑一键配置向导 (检测依赖 + 登录 + 自动定时)
+  [P] 生成新电脑纯净移植压缩包 (一键打包，排除冲突缓存)
+```
+
+---
+
+## ⚙️ 命令行参数
+
+主程序 `rewards_runner.py` 支持丰富的命令行参数：
+
+| 参数 | 描述 |
+| :--- | :--- |
+| `--headless` | 开启无头静默模式（后台静默执行，写入日志） |
+| `--browse30` | 独立执行 Edge 30 分钟后台静默浏览打卡 |
+| `--no-browse30` | 在全自动模式中跳过 30 分钟浏览打卡 |
+| `--daily` | 仅执行每日活动卡片（Daily Set + Earn 任务） |
+| `--search` | 仅执行 PC 桌面端必应搜索 |
+| `--count N` | 指定必应搜索次数（默认 15 次） |
+| `--login` | 打开前台浏览器窗口供首次登录账号 |
+| `--clean` | 深度清理 Edge 运行时产生的缓存垃圾 |
+| `--install-task` | 注册/更新 Windows 每日定时打卡任务 |
+| `--uninstall-task`| 从系统计划任务中卸载自动任务 |
+| `--view-log` | 使用记事本查看运行日志 |
+| `--setup` | 启动新电脑初始化配置向导 |
+| `--pack` | 生成用于跨电脑移植的纯净压缩包 |
+
+---
+
+## 🧩 浏览器插件模式使用说明
+
+如果您希望直接在现有的浏览器内进行轻量级前端打卡：
+1. 打开浏览器扩展管理页面：
+   - Edge: `edge://extensions/`
+   - Chrome: `chrome://extensions/`
+2. 打开右上角 **“开发者模式”** 开关。
+3. 点击 **“加载已解压的扩展程序”**，选择项目根目录下的 **`extension`** 文件夹。
+4. 点击右上角扩展栏图标，点击【⚡ 一键开始全部任务】即可。
+
+---
+
+## ❓ 常见问题排查 (FAQ)
+
+<details>
+<summary><b>Q1: 为什么我的定时任务没有在指定时间跳出黑框？</b></summary>
+这是专为免打扰设计的特性！程序通过 <code>silent_run.vbs</code> 实现了完全后台无弹窗静默运行。您可以双击 <code>查看运行日志.bat</code> 或查看 <code>logs/rewards.log</code> 确认任务执行进度与积分结算情况。
+</details>
+
+<details>
+<summary><b>Q2: 电脑在设定的打卡时间处于关机状态怎么办？</b></summary>
+无需担心！在注册 Windows 计划任务时已启用 <code>StartWhenAvailable</code>（开机立即补跑）参数。只要电脑开机进入桌面，系统会在几分钟内自动启动后台打卡补跑。
+</details>
+
+<details>
+<summary><b>Q3: 为什么周期打卡（Quest / Punch Card）有时显示“冷却中”？</b></summary>
+部分多天打卡任务（例如 4 天连续打卡）具有微软官方的冷却机制：每完成一项子任务后，下一项需要间隔 24 小时方可解锁。程序已智能识别此机制，会在第二天定时运行时自动完成已解锁的子项。
+</details>
+
+<details>
+<summary><b>Q4: 项目运行一段时间后体积会变大吗？</b></summary>
+不会。底层驱动已严格限制磁盘缓存大小为 10MB 并禁用了 Edge 组件自动更新。您也可以随时双击 <code>清理缓存垃圾.bat</code> 进行彻底瘦身。
+</details>
+
+---
+
+## 📜 开源协议
+
+本项目基于 [MIT License](LICENSE) 开源发布。
+
+## ⚠️ 免责声明
+
+本项目仅供个人学习、自动化测试与技术研究使用。请合理使用自动化脚本，严格遵守微软服务条款。作者不对任何因不当使用而引发的账户限制或问题承担责任。

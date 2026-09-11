@@ -1,0 +1,77 @@
+{
+  "manifest_version": 3,
+  "name": "Microsoft Rewards 自动助手",
+  "version": "1.0.0",
+  "description": "微软 Bing Rewards 每日自动化打卡助手，自动在页面内点击完成每日任务卡片、问答答题与 PC 端必应搜索，支持每日定时自动执行与防风控。",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Microsoft Rewards 助手",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "permissions": [
+    "alarms",
+    "storage",
+    "tabs",
+    "scripting",
+    "notifications"
+  ],
+  "host_permissions": [
+    "https://*.bing.com/*",
+    "https://*.msn.com/*",
+    "https://*.microsoft.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://rewards.bing.com/*",
+        "https://*.bing.com/rewards*",
+        "https://*.bing.com/rewards/*",
+        "https://account.microsoft.com/rewards*",
+        "https://account.microsoft.com/rewards/*",
+        "https://rewards.microsoft.com/*",
+        "https://*.rewards.microsoft.com/*"
+      ],
+      "js": [
+        "content/dashboard.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://*.bing.com/*",
+        "https://*.msn.com/*",
+        "https://*.microsoft.com/*"
+      ],
+      "exclude_matches": [
+        "https://rewards.bing.com/*",
+        "https://*.bing.com/rewards*"
+      ],
+      "js": [
+        "content/quiz_solver.js"
+      ],
+      "all_frames": true,
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://*.bing.com/*"
+      ],
+      "js": [
+        "content/bing_search.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

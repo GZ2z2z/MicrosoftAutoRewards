@@ -1,0 +1,28 @@
+# User Profile & Sessions (Contains confidential login tokens/cookies)
+edge_profile/
+
+# Logs & Runtime Diagnostics
+logs/
+*.log
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.pma
+
+# IDE & Editor configs
+.vscode/
+.idea/
+*.suo
+*.user
+
+# Build and packaging artifacts
+*.zip
+*.tar.gz
+dist/
+build/
+
+# OS specific files
+Thumbs.db
+Desktop.ini
