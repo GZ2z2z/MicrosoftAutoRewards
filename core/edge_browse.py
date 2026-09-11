@@ -162,30 +162,28 @@ def run_edge_30min_browsing(driver, max_minutes: int = 35, target_minutes: int =
                 except Exception:
                     pass
 
-        # 周期性核验打卡进度 (每 3 分钟查询一次微软官方记录)
-        if time.time() - last_check_time > 180:
+        # 周期性核验打卡进度 (每 4 分钟查询一次微软官方记录)
+        if time.time() - last_check_time > 240:
             last_check_time = time.time()
             now_str = datetime.datetime.now().strftime("%H:%M:%S")
             print(f"  [{now_str}] ⏱️ 已后台静默浏览 {elapsed_min:.1f} 分钟，正在核验微软服务器进度...", flush=True)
             
-            # 使用新建标签页快速核验，不打断主浏览视口
             try:
-                driver.execute_script(f"window.open('{EARN_URL}', '_blank');")
+                # 在当前主视口直接导航至 EARN_URL 核验进度，避免多标签页关闭时的超时异常
+                driver.get(EARN_URL)
                 time.sleep(3.5)
-                handles = driver.window_handles
-                if len(handles) > 1:
-                    driver.switch_to.window(handles[-1])
-                    check_prog = get_edge_browsing_progress(driver)
-                    driver.close()
-                    driver.switch_to.window(handles[0])
-                    
-                    if check_prog:
-                        c = check_prog["current"]
-                        t = check_prog["target"]
-                        print(f"  [{now_str}] 📈 微软服务器实时打卡进度: {c}/{t} 分钟", flush=True)
-                        if check_prog.get("is_done") or c >= t:
-                            print(f"\n🎉 恭喜！Edge 浏览打卡已达成 {c}/{t} 分钟 (全部完成)！")
-                            return True
+                check_prog = get_edge_browsing_progress(driver)
+                if check_prog:
+                    c = check_prog["current"]
+                    t = check_prog["target"]
+                    print(f"  [{now_str}] 📈 微软服务器实时打卡进度: {c}/{t} 分钟", flush=True)
+                    if check_prog.get("is_done") or c >= t:
+                        print(f"\n🎉 恭喜！Edge 浏览打卡已达成 {c}/{t} 分钟 (全部完成)！")
+                        return True
+                # 核验完毕返回当前浏览内容
+                current_topic = topics[topic_index % len(topics)]
+                driver.get(current_topic)
+                time.sleep(2.5)
             except Exception as e:
                 print(f"  ⚠️ 进度核验微异常 (继续浏览): {e}")
 
