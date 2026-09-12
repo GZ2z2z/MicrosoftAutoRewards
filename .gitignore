@@ -1,5 +1,6 @@
 # User Profile & Sessions (Contains confidential login tokens/cookies)
 edge_profile/
+browser_profile/
 
 # Logs & Runtime Diagnostics
 logs/

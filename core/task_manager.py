@@ -21,43 +21,45 @@ if sys.platform == "win32":
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
 def clean_edge_cache():
-    """清理 Edge Profile 运行时临时缓存，保持体积极致小巧并保留登录凭据"""
+    """清理浏览器运行时临时缓存，保持体积极致小巧并保留登录凭据"""
     print("\n" + "=" * 60)
-    print("🧹 正在清理 Edge 浏览器临时缓存与垃圾文件...")
+    print("🧹 正在清理浏览器临时缓存与垃圾文件...")
     print("   (安全机制: 仅清理网页静态资源与诊断数据，100% 完整保留登录凭据)")
     print("=" * 60)
 
-    # 1. 结束可能残留在后台的自动化 Edge 进程
+    # 1. 结束可能残留在后台的自动化 Edge / Chrome 进程
     try:
-        cmd = "Get-CimInstance Win32_Process -Filter \"Name = 'msedge.exe'\" | Where-Object { $_.CommandLine -like '*STM32Project*' -or $_.CommandLine -like '*Microsoft_rewards*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"
+        cmd = "Get-CimInstance Win32_Process -Filter \"Name = 'msedge.exe' or Name = 'chrome.exe'\" | Where-Object { $_.CommandLine -like '*Microsoft_rewards*' -or $_.CommandLine -like '*MicrosoftRewards*' -or $_.CommandLine -like '*browser_profile*' -or $_.CommandLine -like '*edge_profile*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"
         subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True)
     except Exception:
         pass
 
-    profile_dir = ROOT_DIR / "edge_profile"
-    if not profile_dir.exists():
-        print("✓ 当前未发现 edge_profile 目录，无需清理。")
+    target_profiles = [ROOT_DIR / "edge_profile", ROOT_DIR / "browser_profile"]
+    existing_profiles = [p for p in target_profiles if p.exists()]
+    if not existing_profiles:
+        print("✓ 当前未发现会话缓存目录，无需清理。")
         return
 
-    # 计算清理前体积
-    def get_dir_size(path):
-        total = 0
-        try:
-            for entry in path.rglob("*"):
-                if entry.is_file():
-                    total += entry.stat().st_size
-        except Exception:
-            pass
-        return total
+    for profile_dir in existing_profiles:
+        # 计算清理前体积
+        def get_dir_size(path):
+            total = 0
+            try:
+                for entry in path.rglob("*"):
+                    if entry.is_file():
+                        total += entry.stat().st_size
+            except Exception:
+                pass
+            return total
 
-    before_mb = get_dir_size(profile_dir) / (1024 * 1024)
+        before_mb = get_dir_size(profile_dir) / (1024 * 1024)
 
-    # 可安全删除的临时目录列表
-    disposable_dirs = [
-        profile_dir / "component_crx_cache",
-        profile_dir / "ProvenanceData",
-        profile_dir / "ProvenanceDataTensors",
-        profile_dir / "Edge Wallet",
+        # 可安全删除的临时目录列表
+        disposable_dirs = [
+            profile_dir / "component_crx_cache",
+            profile_dir / "ProvenanceData",
+            profile_dir / "ProvenanceDataTensors",
+            profile_dir / "Edge Wallet",
         profile_dir / "Edge Shopping",
         profile_dir / "Subresource Filter",
         profile_dir / "Edge Entity Extraction",
@@ -89,26 +91,26 @@ def clean_edge_cache():
         profile_dir / "Default" / "Service Worker" / "CacheStorage"
     ]
 
-    for d in disposable_dirs:
-        if d.exists():
+        for d in disposable_dirs:
+            if d.exists():
+                try:
+                    shutil.rmtree(d, ignore_errors=True)
+                except Exception:
+                    pass
+
+        # 清理 .pma 临时监控文件
+        for pma in profile_dir.rglob("*.pma"):
             try:
-                shutil.rmtree(d, ignore_errors=True)
+                pma.unlink(missing_ok=True)
             except Exception:
                 pass
 
-    # 清理 .pma 临时监控文件
-    for pma in profile_dir.rglob("*.pma"):
-        try:
-            pma.unlink(missing_ok=True)
-        except Exception:
-            pass
+        after_mb = get_dir_size(profile_dir) / (1024 * 1024)
+        saved_mb = max(0.0, before_mb - after_mb)
 
-    after_mb = get_dir_size(profile_dir) / (1024 * 1024)
-    saved_mb = max(0.0, before_mb - after_mb)
-
-    print("✓ 清理完成！")
-    print(f"   清理前大小: {before_mb:.2f} MB")
-    print(f"   清理后大小: {after_mb:.2f} MB (本次释放空间: {saved_mb:.2f} MB)")
+        print(f"✓ 已完成目录清理: {profile_dir.name}")
+        print(f"   清理前大小: {before_mb:.2f} MB")
+        print(f"   清理后大小: {after_mb:.2f} MB (本次释放空间: {saved_mb:.2f} MB)")
     print("=" * 60 + "\n")
 
 
@@ -128,7 +130,7 @@ def install_task(time_str: str = "09:00"):
     vbs_path.write_text(vbs_content, encoding="ascii")
 
     task_bat = ROOT_DIR / "run_task.bat"
-    bat_content = '@echo off\ncd /d "%~dp0"\ncall run.bat --headless\n'
+    bat_content = '@echo off\ncd /d "%~dp0"\ncall run.bat --headless --no-browse30\n'
     task_bat.write_text(bat_content, encoding="ascii")
 
     print(f"正在配置定时打卡任务: 每日 {time_str} 执行...")
@@ -199,17 +201,20 @@ def setup_wizard():
         print("✓ Selenium 安装成功！")
 
     # 2. 引导登录
-    print("\n[步骤 2/3] 首次登录微软账号...")
-    print("即将为您打开 Microsoft Edge 浏览器窗口，请在窗口中登录您的微软账号。")
-    print("登录后，登录凭据将永久保存在这台电脑上！")
-    input("请按回车键打开 Edge 登录窗口...")
-
-    from core.browser import get_edge_driver
+    from core.browser import get_browser_driver, detect_available_browser
     from core.dashboard import RewardsDashboard
+
+    detected = detect_available_browser()
+    browser_name = "Google Chrome" if detected == "chrome" else "Microsoft Edge"
+
+    print(f"\n[步骤 2/3] 首次登录微软账号 (检测到系统浏览器: {browser_name})...")
+    print(f"即将为您打开 {browser_name} 浏览器窗口，请在窗口中登录您的微软账号。")
+    print("登录后，登录凭据将永久保存在这台电脑上！")
+    input(f"请按回车键打开 {browser_name} 登录窗口...")
 
     driver = None
     try:
-        driver = get_edge_driver(headless=False)
+        driver = get_browser_driver(headless=False)
         dashboard = RewardsDashboard(driver)
         if dashboard.ensure_logged_in(is_headless=False):
             print("✓ 账号登录验证通过并已持久化保存！")
@@ -235,16 +240,16 @@ def setup_wizard():
 
 
 def create_portable_package():
-    """生成纯净移植压缩包 (排除 edge_profile, logs, 临时文件，避免跨机器冲突与锁定错误)"""
+    """生成纯净移植压缩包 (排除 edge_profile, browser_profile, logs, 临时文件，避免跨机器冲突与锁定错误)"""
     import zipfile
     print("\n" + "=" * 60)
     print("📦 正在生成【新电脑纯净移植压缩包】...")
-    print("   (说明: 自动排除本机锁定的 edge_profile 缓存与日志，彻底避免文件被占用与跨电脑失效)")
+    print("   (说明: 自动排除本机锁定的会话缓存与日志，彻底避免文件被占用与跨电脑失效)")
     print("=" * 60)
 
-    # 1. 结束残留 Edge 进程以确保安全
+    # 1. 结束残留 Edge / Chrome 进程以确保安全
     try:
-        cmd = "Get-CimInstance Win32_Process -Filter \"Name = 'msedge.exe'\" | Where-Object { $_.CommandLine -like '*STM32Project*' -or $_.CommandLine -like '*Microsoft_rewards*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"
+        cmd = "Get-CimInstance Win32_Process -Filter \"Name = 'msedge.exe' or Name = 'chrome.exe'\" | Where-Object { $_.CommandLine -like '*Microsoft_rewards*' -or $_.CommandLine -like '*MicrosoftRewards*' -or $_.CommandLine -like '*browser_profile*' -or $_.CommandLine -like '*edge_profile*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"
         subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True)
     except Exception:
         pass
@@ -256,7 +261,7 @@ def create_portable_package():
         except Exception:
             pass
 
-    exclude_dirs = {"edge_profile", "logs", "__pycache__", ".git", ".vscode", ".idea"}
+    exclude_dirs = {"edge_profile", "browser_profile", "logs", "__pycache__", ".git", ".vscode", ".idea"}
     exclude_extensions = {".zip", ".pyc", ".pma", ".log"}
 
     added_count = 0

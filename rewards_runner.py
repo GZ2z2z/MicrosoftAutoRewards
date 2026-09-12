@@ -18,7 +18,7 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-from core.browser import get_edge_driver
+from core.browser import get_edge_driver, get_browser_driver, detect_available_browser
 from core.dashboard import RewardsDashboard
 from core.searcher import BingSearcher
 from core.edge_browse import run_edge_30min_browsing, get_edge_browsing_progress
@@ -47,13 +47,14 @@ def main():
     parser.add_argument("--browse30", action="store_true", help="后台静默执行 Edge 30 分钟浏览打卡")
     parser.add_argument("--no-browse30", action="store_true", help="跳过 Edge 30 分钟浏览打卡")
     parser.add_argument("--count", type=int, default=15, help="PC 桌面端搜索次数 (默认为 15 次)")
+    parser.add_argument("--browser", choices=["auto", "chrome", "edge"], default="auto", help="选择浏览器引擎 (auto/chrome/edge，默认为 auto)")
     parser.add_argument("--login", action="store_true", help="仅打开浏览器供首次登录微软账号并保存会话")
-    parser.add_argument("--clean", action="store_true", help="清理 Edge 临时缓存垃圾")
+    parser.add_argument("--clean", action="store_true", help="清理临时缓存垃圾")
     parser.add_argument("--install-task", action="store_true", help="安装 Windows 每日自动静默打卡任务")
     parser.add_argument("--uninstall-task", action="store_true", help="卸载 Windows 每日定时打卡任务")
     parser.add_argument("--view-log", action="store_true", help="查看运行日志")
     parser.add_argument("--setup", action="store_true", help="新电脑一键配置向导")
-    parser.add_argument("--pack", action="store_true", help="生成新电脑纯净移植压缩包 (排除 edge_profile 冲突文件)")
+    parser.add_argument("--pack", action="store_true", help="生成纯净移植压缩包 (排除缓存冲突文件)")
     args = parser.parse_args()
 
     # 处理独立管理指令
@@ -77,23 +78,23 @@ def main():
         return
 
     print("=" * 60)
-    print("🚀 Microsoft Rewards 自动化打卡助手 (Edge 原生引擎)")
+    print("🚀 Microsoft Rewards 自动化打卡助手 (Edge / Chrome 双引擎自适应)")
     print("   特性: 真实前台视口、原生发分信标、无死角核验、防风控人机拟真")
     print("=" * 60)
 
     # 如果没有命令行参数，展示清晰的交互选择菜单
     if len(sys.argv) == 1:
         print("\n请选择要执行的操作:")
-        print("  [1] 一键完成基础打卡 (每日活动 + 15次PC必应搜索) [快速推荐]")
-        print("  [2] 仅执行每日活动卡片 (Daily Set 3项 + 更多活动)")
+        print("  [1] 一键完成基础打卡 (每日活动 + 视觉搜索打卡 + 搜索自动领分) [快速推荐]")
+        print("  [2] 仅执行活动卡片与打卡 (Daily Set 3项 + 周期打卡 + 视觉搜索)")
         print("  [3] 仅执行 PC 桌面端必应搜索 (15次自然搜索)")
         print("  [4] 后台静默执行 Edge 30分钟浏览打卡 (赚取打卡积分与印章)")
-        print("  [5] 后台静默全自动打卡 (每日活动 + 搜索 + Edge 30分钟浏览) [全托管推荐]")
-        print("  [6] 首次登录微软账号 (打开 Edge 窗口供登录并永久保存状态)")
+        print("  [5] 后台静默全自动打卡 (每日活动 + 视觉打卡 + 搜索自动领奖) [全托管推荐]")
+        print("  [6] 首次登录微软账号 (打开浏览器窗口供登录并永久保存状态)")
         print("  " + "-" * 56)
         print("  [7] 安装/配置 Windows 每日定时打卡任务 (静默自动运行)")
         print("  [8] 卸载 Windows 每日定时打卡任务")
-        print("  [9] 清理 Edge 临时缓存垃圾 (深度瘦身，保留登录凭据)")
+        print("  [9] 清理临时缓存垃圾 (深度瘦身，保留登录凭据)")
         print("  [L] 查看运行日志 (积分结算记录)")
         print("  [0] 新电脑一键配置向导 (检测依赖 + 登录 + 自动定时)")
         print("  [P] 生成新电脑纯净移植压缩包 (一键打包，排除冲突缓存)")
@@ -114,6 +115,7 @@ def main():
             args.headless = True
         elif choice == "5":
             args.headless = True
+            args.no_browse30 = True
         elif choice == "6":
             args.login = True
         elif choice == "7":
@@ -153,8 +155,7 @@ def main():
 
     driver = None
     try:
-        print("\n⚙️ 正在启动 Microsoft Edge 自动化会话...")
-        driver = get_edge_driver(headless=is_headless)
+        driver = get_browser_driver(headless=is_headless, browser=args.browser)
         dashboard = RewardsDashboard(driver)
 
         # 确保已登录微软账户
@@ -181,15 +182,25 @@ def main():
             if do_daily:
                 dashboard.run_daily_set()
                 dashboard.run_earn_tasks()
+                dashboard.run_visual_search()
 
             # 2. PC 桌面端搜索 (默认 15 次)
             if do_search:
                 searcher = BingSearcher(driver)
                 searcher.perform_searches(count=args.count, min_delay=7.0, max_delay=11.0)
+                # 搜索完成后立即自动领取当次/当天搜索产生的可领取积分
+                dashboard.claim_available_points()
 
-            # 3. 后台静默全自动打卡模式下，自动执行 Edge 30 分钟静默浏览打卡
+            # 3. 后台静默全自动打卡模式下，判断是否执行 Edge 30 分钟静默浏览打卡
+            is_chrome_driver = hasattr(driver, "capabilities") and driver.capabilities.get("browserName") == "chrome"
             if is_headless and not args.no_browse30 and do_all:
-                run_edge_30min_browsing(driver)
+                if is_chrome_driver:
+                    print("\nℹ️ 当前运行引擎为 Chrome（系统未安装 Edge 原生客户端），Edge 30 分钟打卡依赖原生 Edge 系统遥测服务，已自动安全跳过，避免无效挂机。")
+                else:
+                    run_edge_30min_browsing(driver)
+
+            # 4. 自动核验并一键领取所有待领取奖励积分
+            dashboard.claim_available_points()
 
         # 3. 最终积分结算与成果汇报
         driver.get("https://rewards.bing.com/")
@@ -216,7 +227,7 @@ def main():
                 driver.quit()
             except Exception:
                 pass
-            print("🔒 Edge 浏览器会话已安全释放。")
+            print("🔒 浏览器会话已安全释放。")
 
 if __name__ == "__main__":
     main()
