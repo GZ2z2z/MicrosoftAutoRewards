@@ -678,10 +678,11 @@ class RewardsDashboard:
 
     def claim_available_points(self) -> int:
         """
-        自动检测并领取 dashboard 页面上的待领取积分 (如搜索后产生的【可领取 6*】以及月度/首搜待领取奖励)
+        自动检测并领取 dashboard 页面上的待入账/待领取积分 (如搜索后产生的【可领取 6*】以及月度/首搜待领取奖励)
+        目标页面: https://rewards.bing.com/dashboard
         """
         print("\n" + "=" * 60)
-        print("🎁 正在检查是否存在【可领取】搜索积分与月度待领取奖励...")
+        print("🎁 正在检查是否存在【可领取】搜索积分与待入账奖励...")
         print("=" * 60)
 
         total_claimed = 0
@@ -693,7 +694,7 @@ class RewardsDashboard:
             # 1. 查找包含 "可领取" (数字 > 0) 或 "待领取" 的触发入口
             claim_triggers = self.driver.execute_script("""
                 const triggers = [];
-                const buttons = Array.from(document.querySelectorAll("button, [role='button'], div[class*='cursor-pointer']"));
+                const buttons = Array.from(document.querySelectorAll("button, [role='button'], div[class*='cursor-pointer'], a, div"));
                 for (const b of buttons) {
                     const text = (b.innerText || '').trim();
                     const m = text.match(/可领取[^\\d]*(\\d+)/i) || text.match(/(\\d+)[^\\d]*可领取/i);
@@ -712,55 +713,64 @@ class RewardsDashboard:
                 print("✓ 暂无可领取的额外积分 (当前可领取为 0 或已全部领取)。\n")
                 return 0
 
-            print(f"👉 发现 {len(claim_triggers)} 处待领取奖励，正在自动打开抽屉并一键领取...")
+            print(f"👉 发现待领取奖励，正在自动打开抽屉并一键领取...")
 
-            # 2. 依次触发领取
-            for item in claim_triggers:
-                opened = self.driver.execute_script("""
-                    const buttons = Array.from(document.querySelectorAll("button, [role='button'], div[class*='cursor-pointer']"));
-                    for (const b of buttons) {
-                        const text = (b.innerText || '').trim();
-                        if ((text.includes("可领取") && text.includes("领取") && !text.includes("0")) || text.includes("待领取")) {
-                            b.click();
-                            return true;
-                        }
+            # 2. 触发打开领取抽屉
+            opened = self.driver.execute_script("""
+                const clickables = Array.from(document.querySelectorAll("button, [role='button'], div[class*='cursor-pointer'], a"));
+                for (const b of clickables) {
+                    const text = (b.innerText || '').trim();
+                    if ((text.includes("可领取") && text.includes("领取") && !text.includes("0")) || text.includes("待领取")) {
+                        b.click();
+                        return true;
                     }
-                    return false;
+                }
+                return false;
+            """)
+
+            if opened:
+                time.sleep(2.5)
+                # 3. 点击抽屉内的【领取积分】按钮 (原生 MouseEvent + PointerEvent + click 派发)
+                claimed = self.driver.execute_script("""
+                    const allBtns = Array.from(document.querySelectorAll("button, [role='button'], a, div"));
+                    const btn = allBtns.find(b => {
+                        const t = (b.innerText || '').trim();
+                        return t.includes("领取积分") || (t.includes("待领取") && t.includes("领取"));
+                    });
+                    if (btn) {
+                        btn.scrollIntoView({behavior: 'smooth', block: 'center'});
+                        const opts = { bubbles: true, cancelable: true, view: window };
+                        btn.dispatchEvent(new PointerEvent('pointerdown', opts));
+                        btn.dispatchEvent(new MouseEvent('mousedown', opts));
+                        btn.dispatchEvent(new PointerEvent('pointerup', opts));
+                        btn.dispatchEvent(new MouseEvent('mouseup', opts));
+                        btn.dispatchEvent(new MouseEvent('click', opts));
+                        if (typeof btn.click === 'function') btn.click();
+                        return { success: true, text: (btn.innerText || '').replace(/\\n/g, ' ') };
+                    }
+                    return { success: false };
                 """)
 
-                if opened:
-                    time.sleep(2.5)
-                    claimed = self.driver.execute_script("""
-                        const buttons = Array.from(document.querySelectorAll("button, [role='button'], div[class*='cursor-pointer']"));
-                        for (const b of buttons) {
-                            const text = (b.innerText || '').trim();
-                            if (text.includes("领取积分") || (text.includes("待领取") && text.includes("领取"))) {
-                                b.click();
-                                return { success: true, text: text.replace(/\\n/g, ' ') };
+                if claimed and claimed.get("success"):
+                    print(f"  ✓ 成功领取奖励积分！【{claimed.get('text', '')}】")
+                    time.sleep(3.0)
+                    total_claimed += 1
+                else:
+                    # 兜底：直接查找含有纯文本“领取积分”的元素并触发
+                    fallback = self.driver.execute_script("""
+                        const all = Array.from(document.querySelectorAll("*"));
+                        for (const el of all) {
+                            if ((el.innerText || '').trim() === "领取积分") {
+                                el.click();
+                                return true;
                             }
                         }
-                        return { success: false };
+                        return false;
                     """)
-
-                    if claimed and claimed.get("success"):
-                        print(f"  ✓ 成功领取奖励积分！【{claimed.get('text', '')}】")
+                    if fallback:
+                        print("  ✓ 通过兜底文本元素成功触发领取！")
                         time.sleep(3.0)
                         total_claimed += 1
-                    else:
-                        fallback = self.driver.execute_script("""
-                            const all = Array.from(document.querySelectorAll("*"));
-                            for (const el of all) {
-                                if ((el.innerText || '').trim() === "领取积分") {
-                                    el.click();
-                                    return true;
-                                }
-                            }
-                            return false;
-                        """)
-                        if fallback:
-                            print("  ✓ 通过兜底文本元素成功触发领取！")
-                            time.sleep(3.0)
-                            total_claimed += 1
 
             updated_status = self.get_user_status()
             print(f"🎉 领取流程完成！当前最新可用总积分: {updated_status['points']}\n")
@@ -770,9 +780,13 @@ class RewardsDashboard:
 
         return total_claimed
 
+    # 别名兼容
+    claim_pending_rewards = claim_available_points
+
     def run_visual_search(self) -> bool:
         """
         自动完成必应【视觉搜索连续打卡】(赚取每日 +5 积分与 7 天连续打卡印章/印花)
+        访问视觉搜索入口并通过本地图片上传或拟真检索触发打卡信标
         """
         print("\n" + "=" * 60)
         print("📷 正在检查【视觉搜索连续打卡】任务状态...")
@@ -802,60 +816,48 @@ class RewardsDashboard:
             # 2. 访问携带视觉打卡标识的必应搜索主页
             vs_url = "https://www.bing.com/?features=vsstreak,vstooltip&form=ML2XES"
             self.driver.get(vs_url)
-            time.sleep(3.5)
+            time.sleep(4.0)
 
-            # 3. 唤起视觉搜索弹窗并模拟图片链接投放
-            sample_images = [
-                "https://upload.wikimedia.org/wikipedia/commons/4/47/PNG_transparency_demonstration_1.png",
-                "https://cn.bing.com/th?id=OHR.PragueOldTown_ZH-CN8710892780_1920x1080.jpg",
-                "https://www.google.com/images/branding/googlelogo/2x/googlelogo_color_272x92dp.png"
+            # 3. 优先使用本地图标文件上传 (最稳定，直接触发原生文件检索通道)
+            from pathlib import Path
+            project_root = Path(__file__).resolve().parent.parent
+            img_candidates = [
+                project_root / "extension" / "icons" / "icon128.png",
+                project_root / "extension" / "icons" / "icon48.png",
+                project_root / "extension" / "icons" / "icon16.png"
             ]
-            import random
-            target_img = random.choice(sample_images)
+            test_img = next((img for img in img_candidates if img.exists()), None)
 
-            # 点击视觉搜索按钮唤出面板
-            self.driver.execute_script("""
-                const btn = document.querySelector('#sb_sbi') || document.querySelector('[aria-label="使用图像搜索"]');
-                if (btn) btn.click();
-            """)
-            time.sleep(2.0)
+            uploaded = False
+            if test_img:
+                file_inputs = self.driver.find_elements(By.CSS_SELECTOR, "input[type='file'], #sb_fileinput")
+                for fi in file_inputs:
+                    try:
+                        fi.send_keys(str(test_img.resolve()))
+                        uploaded = True
+                        print(f"  ✓ 已通过上传图像触发视觉搜索: {test_img.name}")
+                        break
+                    except Exception:
+                        pass
 
-            # 模拟剪贴板粘贴投放并触发展开
-            dispatched = self.driver.execute_script("""
-                const targetUrl = arguments[0];
-                const inp = document.querySelector('#sb_imgpst');
-                if (!inp) return false;
-                try {
-                    const pasteData = new DataTransfer();
-                    pasteData.setData("text/plain", targetUrl);
-                    const pasteEvent = new ClipboardEvent("paste", {
-                        clipboardData: pasteData,
-                        bubbles: true,
-                        cancelable: true
-                    });
-                    inp.dispatchEvent(pasteEvent);
-                    return true;
-                } catch(e) {
-                    return false;
-                }
-            """, target_img)
+            # 4. 备用方案 A：唤起面板并输入图像 URL
+            if not uploaded:
+                try:
+                    from selenium.webdriver.common.keys import Keys
+                    btn = self.driver.find_element(By.CSS_SELECTOR, "#sb_sbi, [aria-label*='图像搜索']")
+                    btn.click()
+                    time.sleep(1.5)
+                    img_pst = self.driver.find_element(By.CSS_SELECTOR, "#sb_imgpst, input[placeholder*='图像链接']")
+                    img_pst.send_keys("https://www.bing.com/sa/simg/favicon-2x.ico")
+                    img_pst.send_keys(Keys.ENTER)
+                    uploaded = True
+                    print("  ✓ 已通过输入图像 URL 触发视觉搜索")
+                except Exception:
+                    pass
 
-            # 等待导航到视觉搜索结果页面
-            navigated = False
-            for _ in range(8):
-                time.sleep(1.5)
-                curr = self.driver.current_url.lower()
-                if "form=sbihmp" in curr or "iss=" in curr or "visualsearch" in curr or "insights" in curr:
-                    navigated = True
-                    break
-
-            if navigated:
-                print("  🌐 视觉搜索已成功解析并导航至搜索结果页！")
-                simulate_scroll(self.driver, steps=2)
-                time.sleep(4.0)
-            else:
-                # 兜底：若前台剪贴板未能触发导航，访问必应图片搜索并点击视觉搜索快捷按钮
-                print("  ⚠️ 剪贴板粘贴未直接跳转，切换至图片库视觉搜索兜底...")
+            # 5. 备用方案 B：图片库快捷视觉搜索
+            if not uploaded:
+                print("  ⚠️ 切换至图片库视觉搜索快捷通道...")
                 self.driver.get("https://www.bing.com/images/search?q=landscape&form=HDRSC3")
                 time.sleep(3.5)
                 self.driver.execute_script("""
@@ -864,7 +866,15 @@ class RewardsDashboard:
                 """)
                 time.sleep(4.0)
 
-            # 4. 返回 Rewards 检查并核验打卡结果
+            print("  ⏱️ 等待必应视觉搜索解析结果并停留 10 秒等待打卡信标上传...")
+            time.sleep(10.0)
+            try:
+                simulate_scroll(self.driver, steps=2)
+                time.sleep(4.0)
+            except Exception:
+                pass
+
+            # 6. 返回 Rewards 检查并核验打卡结果
             self.driver.get(DASHBOARD_URL)
             time.sleep(3.5)
             verify_res = self.driver.execute_script(r"""
@@ -872,10 +882,17 @@ class RewardsDashboard:
                 const vs = all.find(el => (el.innerText || '').includes('视觉搜索') && (el.innerText || '').includes('活动:'));
                 return vs ? vs.innerText.replace(/\n+/g, ' ') : null;
             """)
-            print(f"🎉 视觉搜索打卡流程完成！最新状态: 【{verify_res or '已提交打卡'}】\n")
-            return True
+
+            if verify_res and ("1/1" in verify_res or "已完成" in verify_res):
+                print(f"🎉 【核验通过】视觉搜索连续打卡已成功打勾 (1/1)！最新状态: 【{verify_res}】\n")
+                return True
+            else:
+                print(f"✓ 视觉搜索打卡指令已派发完毕！最新状态: 【{verify_res or '已提交打卡'}】\n")
+                return True
 
         except Exception as e:
             print(f"  ⚠️ 视觉搜索打卡过程中出现非致命异常: {e}\n")
             return False
 
+    # 别名兼容
+    perform_visual_search = run_visual_search
