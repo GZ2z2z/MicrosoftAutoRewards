@@ -46,7 +46,7 @@ def main():
     parser.add_argument("--search", action="store_true", help="仅执行 PC 桌面端必应搜索")
     parser.add_argument("--browse30", action="store_true", help="后台静默执行 Edge 30 分钟浏览打卡")
     parser.add_argument("--no-browse30", action="store_true", help="跳过 Edge 30 分钟浏览打卡")
-    parser.add_argument("--count", type=int, default=15, help="PC 桌面端搜索次数 (默认为 15 次)")
+    parser.add_argument("--count", type=int, default=22, help="PC 桌面端搜索次数 (默认为 22 次，自动核验补足至 60/60 满分)")
     parser.add_argument("--browser", choices=["auto", "chrome", "edge"], default="auto", help="选择浏览器引擎 (auto/chrome/edge，默认为 auto)")
     parser.add_argument("--visual", action="store_true", help="仅执行必应视觉搜索连续打卡")
     parser.add_argument("--claim", action="store_true", help="仅检查并领取待入账积分")
@@ -87,11 +87,11 @@ def main():
     # 如果没有命令行参数，展示清晰的交互选择菜单
     if len(sys.argv) == 1:
         print("\n请选择要执行的操作:")
-        print("  [1] 一键完成全套任务 (每日活动 + 视觉搜索 + 15次搜索 + 领待领积分) [快速推荐]")
+        print("  [1] 一键完成全套任务 (每日活动 + 视觉搜索 + 60分必应搜索 + 自动领奖) [快速推荐]")
         print("  [2] 仅执行每日活动卡片 (Daily Set 3项 + 更多活动)")
-        print("  [3] 仅执行 PC 桌面端必应搜索 (15次自然搜索)")
+        print("  [3] 仅执行 PC 桌面端必应搜索 (确保达到 60/60 满额积分)")
         print("  [4] 后台静默执行 Edge 30分钟浏览打卡 (赚取打卡积分与印章)")
-        print("  [5] 后台静默全自动打卡 (全套任务 + 视觉搜索 + 搜索 + Edge 30分钟浏览) [全托管推荐]")
+        print("  [5] 后台静默全自动托管打卡 (全套任务 + 视觉搜索 + 60分搜索 + Edge 30分钟浏览 + 领奖) [全托管推荐]")
         print("  [6] 仅执行必应视觉搜索连续打卡")
         print("  [7] 首次登录微软账号 (打开浏览器窗口供登录并永久保存状态)")
         print("  " + "-" * 56)
@@ -118,7 +118,6 @@ def main():
             args.headless = True
         elif choice == "5":
             args.headless = True
-            args.no_browse30 = True
         elif choice == "6":
             args.visual = True
         elif choice == "7":
@@ -176,11 +175,11 @@ def main():
         print(f"💰 任务开始前可用总积分: {start_status['points']} | 连胜: {start_status['streak']} 天\n")
 
         if args.claim:
-            # 仅领取待入账积分
+            # 仅独立领取待入账积分
             dashboard.claim_pending_rewards()
         elif args.visual:
             # 仅执行视觉搜索打卡
-            dashboard.perform_visual_search()
+            dashboard.run_visual_search()
         elif args.browse30:
             # 仅独立执行 Edge 30 分钟后台静默浏览打卡
             run_edge_30min_browsing(driver)
@@ -189,31 +188,27 @@ def main():
             do_daily = args.daily or do_all
             do_search = args.search or do_all
 
-            # 1. 检查并自动领取待入账积分 (如每月首次搜索奖励、连签奖励等)
-            dashboard.claim_pending_rewards()
-
-            # 2. 每日活动、日常任务卡片与必应视觉搜索连续打卡
+            # 阶段 1：每日活动与日常任务卡片 (Daily Set + Earn)
             if do_daily:
                 dashboard.run_daily_set()
                 dashboard.run_earn_tasks()
                 dashboard.run_visual_search()
 
-            # 3. PC 桌面端搜索 (默认 15 次)
+            # 阶段 2：PC 桌面端必应搜索 (确保达成 60/60 满额积分)
             if do_search:
                 searcher = BingSearcher(driver)
-                searcher.perform_searches(count=args.count, min_delay=7.0, max_delay=11.0)
-                # 搜索完成后立即自动领取当次/当天搜索产生的可领取积分
-                dashboard.claim_available_points()
+                searcher.perform_searches(count=args.count, min_delay=7.0, max_delay=11.0, ensure_max=True)
 
-            # 4. 后台静默全自动打卡模式下，判断是否执行 Edge 30 分钟静默浏览打卡
+            # 阶段 3：后台静默全自动模式或指定模式下，执行 Edge 30 分钟静默浏览打卡
             is_chrome_driver = hasattr(driver, "capabilities") and driver.capabilities.get("browserName") == "chrome"
-            if is_headless and not args.no_browse30 and do_all:
+            should_browse30 = (is_headless or args.browse30) and not args.no_browse30 and do_all
+            if should_browse30:
                 if is_chrome_driver:
                     print("\nℹ️ 当前运行引擎为 Chrome（系统未安装 Edge 原生客户端），Edge 30 分钟打卡依赖原生 Edge 系统遥测服务，已自动安全跳过，避免无效挂机。")
                 else:
                     run_edge_30min_browsing(driver)
 
-            # 4. 自动核验并一键领取所有待领取奖励积分
+            # 阶段 4：【最终核心收尾】在所有其他任务全部完成后，最后统一检查并一键领取所有待入账奖励积分
             dashboard.claim_available_points()
 
         # 3. 最终积分结算与成果汇报

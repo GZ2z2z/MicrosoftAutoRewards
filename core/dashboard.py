@@ -691,86 +691,82 @@ class RewardsDashboard:
                 self.driver.get(DASHBOARD_URL)
                 time.sleep(3.5)
 
-            # 1. 查找包含 "可领取" (数字 > 0) 或 "待领取" 的触发入口
-            claim_triggers = self.driver.execute_script("""
-                const triggers = [];
-                const buttons = Array.from(document.querySelectorAll("button, [role='button'], div[class*='cursor-pointer'], a, div"));
-                for (const b of buttons) {
-                    const text = (b.innerText || '').trim();
-                    const m = text.match(/可领取[^\\d]*(\\d+)/i) || text.match(/(\\d+)[^\\d]*可领取/i);
-                    if (m && parseInt(m[1], 10) > 0) {
-                        triggers.push({ text: text, points: parseInt(m[1], 10) });
-                    } else if (text.includes("可领取") && text.includes("领取") && !text.includes("0")) {
-                        triggers.push({ text: text, points: 0 });
-                    } else if (text.includes("待领取")) {
-                        triggers.push({ text: text, points: 0 });
-                    }
+            # 1. 精准查找包含“可领取”且具有数字>0的按钮卡片
+            claim_info = self.driver.execute_script(r"""
+                const allNodes = Array.from(document.querySelectorAll('button, [role="button"]'));
+                const claimCard = allNodes.find(el => {
+                    const t = (el.innerText || '').replace(/\s+/g, ' ');
+                    return t.includes('可领取') && t.includes('领取') && el.children.length <= 4;
+                });
+                if (claimCard) {
+                    const m = claimCard.innerText.match(/(\d+)/);
+                    return { found: true, pts: m ? parseInt(m[1], 10) : 0, text: claimCard.innerText };
                 }
-                return triggers;
+                return { found: false, pts: 0 };
             """)
 
-            if not claim_triggers:
+            if not claim_info.get("found") or claim_info.get("pts", 0) <= 0:
                 print("✓ 暂无可领取的额外积分 (当前可领取为 0 或已全部领取)。\n")
                 return 0
 
-            print(f"👉 发现待领取奖励，正在自动打开抽屉并一键领取...")
+            pending_pts = claim_info["pts"]
+            print(f"👉 发现待入账奖励 (+{pending_pts} 积分)，正在自动打开抽屉并一键领取...")
 
-            # 2. 触发打开领取抽屉
-            opened = self.driver.execute_script("""
-                const clickables = Array.from(document.querySelectorAll("button, [role='button'], div[class*='cursor-pointer'], a"));
-                for (const b of clickables) {
-                    const text = (b.innerText || '').trim();
-                    if ((text.includes("可领取") && text.includes("领取") && !text.includes("0")) || text.includes("待领取")) {
-                        b.click();
-                        return true;
-                    }
+            # 2. 点击卡片打开抽屉
+            opened = self.driver.execute_script(r"""
+                const btns = Array.from(document.querySelectorAll('button, [role="button"]'));
+                const target = btns.find(b => {
+                    const t = (b.innerText || '').replace(/\s+/g, ' ');
+                    return t.includes('可领取') && t.includes('领取') && b.children.length <= 4;
+                });
+                if (target) {
+                    target.click();
+                    return true;
                 }
                 return false;
             """)
+            time.sleep(3.0)
 
-            if opened:
-                time.sleep(2.5)
-                # 3. 点击抽屉内的【领取积分】按钮 (原生 MouseEvent + PointerEvent + click 派发)
-                claimed = self.driver.execute_script("""
-                    const allBtns = Array.from(document.querySelectorAll("button, [role='button'], a, div"));
-                    const btn = allBtns.find(b => {
-                        const t = (b.innerText || '').trim();
-                        return t.includes("领取积分") || (t.includes("待领取") && t.includes("领取"));
-                    });
-                    if (btn) {
-                        btn.scrollIntoView({behavior: 'smooth', block: 'center'});
-                        const opts = { bubbles: true, cancelable: true, view: window };
-                        btn.dispatchEvent(new PointerEvent('pointerdown', opts));
-                        btn.dispatchEvent(new MouseEvent('mousedown', opts));
-                        btn.dispatchEvent(new PointerEvent('pointerup', opts));
-                        btn.dispatchEvent(new MouseEvent('mouseup', opts));
-                        btn.dispatchEvent(new MouseEvent('click', opts));
-                        if (typeof btn.click === 'function') btn.click();
-                        return { success: true, text: (btn.innerText || '').replace(/\\n/g, ' ') };
+            # 3. 精准点击抽屉内部的【领取积分】按钮 (文本含有“待领取”与“领取积分”的 button)
+            claimed = self.driver.execute_script(r"""
+                const allBtns = Array.from(document.querySelectorAll('button'));
+                const btn = allBtns.find(b => {
+                    const t = (b.innerText || '').trim();
+                    return t.includes('领取积分') && (t.includes('待领取') || t.includes('领取'));
+                });
+                if (btn) {
+                    btn.scrollIntoView({behavior: 'smooth', block: 'center'});
+                    const opts = { bubbles: true, cancelable: true, view: window };
+                    btn.dispatchEvent(new PointerEvent('pointerdown', opts));
+                    btn.dispatchEvent(new MouseEvent('mousedown', opts));
+                    btn.dispatchEvent(new PointerEvent('pointerup', opts));
+                    btn.dispatchEvent(new MouseEvent('mouseup', opts));
+                    btn.dispatchEvent(new MouseEvent('click', opts));
+                    if (typeof btn.click === 'function') btn.click();
+                    return { success: true, text: (btn.innerText || '').replace(/\n+/g, ' ') };
+                }
+                return { success: false };
+            """)
+
+            if claimed and claimed.get("success"):
+                print(f"  ✓ 成功领取奖励积分！【{claimed.get('text', '')}】")
+                time.sleep(3.0)
+                total_claimed += 1
+            else:
+                fallback = self.driver.execute_script("""
+                    const all = Array.from(document.querySelectorAll("*"));
+                    for (const el of all) {
+                        if ((el.innerText || '').trim() === "领取积分") {
+                            el.click();
+                            return true;
+                        }
                     }
-                    return { success: false };
+                    return false;
                 """)
-
-                if claimed and claimed.get("success"):
-                    print(f"  ✓ 成功领取奖励积分！【{claimed.get('text', '')}】")
+                if fallback:
+                    print("  ✓ 通过兜底文本元素成功触发领取！")
                     time.sleep(3.0)
                     total_claimed += 1
-                else:
-                    # 兜底：直接查找含有纯文本“领取积分”的元素并触发
-                    fallback = self.driver.execute_script("""
-                        const all = Array.from(document.querySelectorAll("*"));
-                        for (const el of all) {
-                            if ((el.innerText || '').trim() === "领取积分") {
-                                el.click();
-                                return true;
-                            }
-                        }
-                        return false;
-                    """)
-                    if fallback:
-                        print("  ✓ 通过兜底文本元素成功触发领取！")
-                        time.sleep(3.0)
-                        total_claimed += 1
 
             updated_status = self.get_user_status()
             print(f"🎉 领取流程完成！当前最新可用总积分: {updated_status['points']}\n")
@@ -793,18 +789,22 @@ class RewardsDashboard:
         print("=" * 60)
 
         try:
-            if "rewards.bing.com" not in self.driver.current_url.lower():
+            if "rewards.bing.com/dashboard" not in self.driver.current_url.lower():
                 self.driver.get(DASHBOARD_URL)
                 time.sleep(3.5)
 
-            # 1. 检查今日是否已完成
+            # 1. 检查今日是否已完成 (精准匹配视觉搜索卡片，防止祖先容器误判)
             is_already_done = self.driver.execute_script(r"""
-                const all = Array.from(document.querySelectorAll('button, div, section, p, span'));
-                const vsEl = all.find(el => {
+                const btns = Array.from(document.querySelectorAll('button, div[role="button"]'));
+                const vsCard = btns.find(el => {
                     const t = (el.innerText || '').trim();
-                    return t.includes('视觉搜索') && (t.includes('活动: 1/1') || t.includes('1/1') || t.includes('已完成'));
+                    return t.includes('视觉搜索') && t.includes('活动:') && t.length < 50;
                 });
-                return Boolean(vsEl);
+                if (vsCard) {
+                    const t = vsCard.innerText;
+                    return t.includes('1/1') || t.includes('已完成');
+                }
+                return false;
             """)
 
             if is_already_done:
@@ -866,8 +866,8 @@ class RewardsDashboard:
                 """)
                 time.sleep(4.0)
 
-            print("  ⏱️ 等待必应视觉搜索解析结果并停留 10 秒等待打卡信标上传...")
-            time.sleep(10.0)
+            print("  ⏱️ 等待必应视觉搜索解析结果并停留 12 秒等待打卡信标上传...")
+            time.sleep(12.0)
             try:
                 simulate_scroll(self.driver, steps=2)
                 time.sleep(4.0)
@@ -876,11 +876,14 @@ class RewardsDashboard:
 
             # 6. 返回 Rewards 检查并核验打卡结果
             self.driver.get(DASHBOARD_URL)
-            time.sleep(3.5)
+            time.sleep(4.0)
             verify_res = self.driver.execute_script(r"""
-                const all = Array.from(document.querySelectorAll('button, div, p, span'));
-                const vs = all.find(el => (el.innerText || '').includes('视觉搜索') && (el.innerText || '').includes('活动:'));
-                return vs ? vs.innerText.replace(/\n+/g, ' ') : null;
+                const btns = Array.from(document.querySelectorAll('button, div[role="button"]'));
+                const vsCard = btns.find(el => {
+                    const t = (el.innerText || '').trim();
+                    return t.includes('视觉搜索') && t.includes('活动:') && t.length < 50;
+                });
+                return vsCard ? vsCard.innerText.replace(/\n+/g, ' ') : null;
             """)
 
             if verify_res and ("1/1" in verify_res or "已完成" in verify_res):
