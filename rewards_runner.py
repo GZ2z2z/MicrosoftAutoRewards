@@ -65,7 +65,7 @@ def main():
         clean_edge_cache()
         return
     if args.install_task:
-        install_task(time_str=args.time or "08:30")
+        install_task(time_str=args.time)
         return
     if args.uninstall_task:
         uninstall_task()
@@ -124,8 +124,7 @@ def main():
         elif choice == "7":
             args.login = True
         elif choice == "8":
-            time_input = input("请输入每日自动打卡时间 (格式如 8.30 或 08:30，直接回车默认 8.30): ").strip()
-            install_task(time_str=time_input or "08:30")
+            install_task()
             return
         elif choice == "9":
             uninstall_task()

@@ -9,6 +9,7 @@ import sys
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 # 确保在 Windows 控制台支持 UTF-8
 if sys.platform == "win32":
@@ -148,8 +149,21 @@ def normalize_time_str(raw_time: str) -> str:
     return "08:30"
 
 
-def install_task(time_str: str = "08:30"):
+def install_task(time_str: Optional[str] = None):
     """在 Windows 计划任务中注册每日静默运行任务"""
+    if not time_str:
+        print("\n" + "=" * 60)
+        print("⏰ 设置 Microsoft Rewards 每日自动定时打卡任务")
+        print("=" * 60)
+        print("\n请输入每天希望自动执行打卡的时间：")
+        print("  • 格式支持：8.30 (代表 8:30) 或直接输入 8:30、09:00 等")
+        print("  • 直接按【回车键 (Enter)】使用默认时间 [ 8.30 / 08:30 ]\n")
+        try:
+            user_input = input("请输入打卡时间 (直接回车默认 8.30): ").strip()
+        except Exception:
+            user_input = "8.30"
+        time_str = user_input or "8.30"
+
     time_str = normalize_time_str(time_str)
     print("\n" + "=" * 60)
     print("⏰ 安装 Windows 每日自动定时打卡任务")
