@@ -180,35 +180,43 @@ def main():
         elif args.visual:
             # 仅执行视觉搜索打卡
             dashboard.run_visual_search()
+            dashboard.claim_available_points()
         elif args.browse30:
             # 仅独立执行 Edge 30 分钟后台静默浏览打卡
             run_edge_30min_browsing(driver)
+            dashboard.claim_available_points()
         else:
             do_all = not args.daily and not args.search
             do_daily = args.daily or do_all
             do_search = args.search or do_all
 
-            # 阶段 1：每日活动与日常任务卡片 (Daily Set + Earn)
+            # 阶段 1：每日活动卡片 (Daily Set，自动检测已完成则跳过)
             if do_daily:
                 dashboard.run_daily_set()
+
+            # 阶段 2：日常任务与周期打卡 (Earn 任务，自动检测已完成/未解锁则跳过)
+            if do_daily:
                 dashboard.run_earn_tasks()
+
+            # 阶段 3：必应视觉搜索连续打卡 (自动检测 1/1 已完成则跳过)
+            if do_daily:
                 dashboard.run_visual_search()
 
-            # 阶段 2：PC 桌面端必应搜索 (确保达成 60/60 满额积分)
-            if do_search:
-                searcher = BingSearcher(driver)
-                searcher.perform_searches(count=args.count, min_delay=7.0, max_delay=11.0, ensure_max=True)
-
-            # 阶段 3：后台静默全自动模式或指定模式下，执行 Edge 30 分钟静默浏览打卡
+            # 阶段 4：Edge 30 分钟后台静默浏览打卡 (自动检测 30/30 分钟已达成则跳过)
             is_chrome_driver = hasattr(driver, "capabilities") and driver.capabilities.get("browserName") == "chrome"
             should_browse30 = (is_headless or args.browse30) and not args.no_browse30 and do_all
             if should_browse30:
                 if is_chrome_driver:
-                    print("\nℹ️ 当前运行引擎为 Chrome（系统未安装 Edge 原生客户端），Edge 30 分钟打卡依赖原生 Edge 系统遥测服务，已自动安全跳过，避免无效挂机。")
+                    print("\nℹ️ 当前运行引擎为 Chrome（系统未安装 Edge 原生客户端），Edge 30 分钟打卡依赖原生 Edge 系统遥测服务，已自动安全跳过。")
                 else:
                     run_edge_30min_browsing(driver)
 
-            # 阶段 4：【最终核心收尾】在所有其他任务全部完成后，最后统一检查并一键领取所有待入账奖励积分
+            # 阶段 5：【倒数第二】PC 桌面端必应搜索 (核验 60/60 积分，已满跳过，未满按缺额精准补齐)
+            if do_search:
+                searcher = BingSearcher(driver)
+                searcher.perform_searches(count=args.count, min_delay=7.0, max_delay=11.0, ensure_max=True)
+
+            # 阶段 6：【最后收尾】检查并一键领取所有待入账奖励积分 (为0则跳过，领取后二次核验确认清零)
             dashboard.claim_available_points()
 
         # 3. 最终积分结算与成果汇报

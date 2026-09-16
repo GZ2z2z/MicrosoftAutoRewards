@@ -144,7 +144,7 @@ class RewardsDashboard:
                 // 若卡片带有明确的积分增加标志 (+10, +5 等) 或任务进度，属于正常任务，绝不能当作普通外链过滤！
                 const hasPointsBadge = /\+\s*\d+/.test(text) || /\d+\s*(?:个?任务|tasks?)/i.test(text);
 
-                if (/抽奖|券包|打折|优惠券|捐赠|捐款|sweepstakes|voucher|donate/i.test(c)) return true;
+                if (/抽奖|券包|打折|优惠券|捐赠|捐款|sweepstakes|voucher|donate|禮品卡|礼品卡|gift\s*card|套件|古代錢幣|精选兑换/i.test(c)) return true;
                 if (/徽章|成就|勋章|称号|办公室伙伴|dos\s*老大|音频迷|(?<!网络)本地英雄|badges?|achievements?/i.test(c)) return true;
                 if (!hasPointsBadge && /^(?:可用积分|积分上限|可领取|总积分|当前总积分|连胜天数|连胜|波罗|个人资料|目标|查看全部|状态|级别|等级|设置|帮助|反馈|隐私|条款|points|streak|status|goal|连签奖励|活动|必应|microsoft edge)$/i.test(title.trim())) return true;
                 if (href && !href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('/')) return true;
@@ -706,7 +706,7 @@ class RewardsDashboard:
             """)
 
             if not claim_info.get("found") or claim_info.get("pts", 0) <= 0:
-                print("✓ 暂无可领取的额外积分 (当前可领取为 0 或已全部领取)。\n")
+                print("✓ 当前暂无可领取的额外积分 (可领取: 0)，无需执行领取，直接跳过！\n")
                 return 0
 
             pending_pts = claim_info["pts"]
@@ -749,7 +749,7 @@ class RewardsDashboard:
             """)
 
             if claimed and claimed.get("success"):
-                print(f"  ✓ 成功领取奖励积分！【{claimed.get('text', '')}】")
+                print(f"  ✓ 成功触发领取操作！【{claimed.get('text', '')}】")
                 time.sleep(3.0)
                 total_claimed += 1
             else:
@@ -768,8 +768,50 @@ class RewardsDashboard:
                     time.sleep(3.0)
                     total_claimed += 1
 
+            # 4. 【核验环节：领取完成后检测一遍是不是成功领取】
+            print("  🔍 正在向微软服务器核验领取结果与最新状态...")
+            time.sleep(2.5)
+            verify_res = self.driver.execute_script(r"""
+                const all = Array.from(document.querySelectorAll('*'));
+                const noMorePoints = all.some(el => (el.innerText || '').includes('当前没有要领取的积分'));
+                const zeroButton = all.some(el => {
+                    const t = (el.innerText || '').trim();
+                    return t === '0\n\n领取积分' || t === '0 领取积分' || t.startsWith('0\n\n');
+                });
+                
+                const btns = Array.from(document.querySelectorAll('button, [role="button"]'));
+                const card = btns.find(b => {
+                    const t = (b.innerText || '').replace(/\s+/g, ' ');
+                    return t.includes('可领取') && b.children.length <= 5;
+                });
+                let cardPts = 0;
+                if (card) {
+                    const m = card.innerText.match(/(\d+)/);
+                    cardPts = m ? parseInt(m[1], 10) : 0;
+                }
+                
+                return {
+                    isClean: noMorePoints || zeroButton || cardPts === 0,
+                    cardPts: cardPts
+                };
+            """)
+
             updated_status = self.get_user_status()
-            print(f"🎉 领取流程完成！当前最新可用总积分: {updated_status['points']}\n")
+            if verify_res and verify_res.get("isClean"):
+                print(f"  ✓ 【核验确认】奖励积分已成功划转入账！待入账积分已清零 (0)，最新可用总积分: {updated_status['points']}\n")
+            else:
+                rem = verify_res.get('cardPts', 0) if verify_res else 0
+                print(f"  ⚠️ 核验提示：微软服务器可能存在同步微延迟 (剩余待领取: {rem} 分)，当前最新可用总积分: {updated_status['points']}\n")
+
+            # 5. 关闭抽屉，恢复页面整洁
+            self.driver.execute_script("""
+                const closeBtn = Array.from(document.querySelectorAll('button, div[role="button"]')).find(b => {
+                    const t = (b.innerText || '').trim();
+                    return t === '关闭' || t === '✕' || t === '×' || b.getAttribute('aria-label') === '关闭' || b.getAttribute('aria-label') === 'Close';
+                });
+                if (closeBtn) closeBtn.click();
+            """)
+            time.sleep(1.0)
 
         except Exception as e:
             print(f"  ⚠️ 自动领取积分过程中发生非致命异常: {e}\n")
