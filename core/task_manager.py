@@ -114,8 +114,43 @@ def clean_edge_cache():
     print("=" * 60 + "\n")
 
 
-def install_task(time_str: str = "09:00"):
+def normalize_time_str(raw_time: str) -> str:
+    """
+    格式化时间字符串为标准的 24 小时制 HH:mm
+    支持输入格式：
+      - 8.30 / 8.3 -> 08:30
+      - 8:30 / 08:30 -> 08:30
+      - 9.00 / 9 -> 09:00
+      - 12.00 / 12:00 -> 12:00
+    若为空或格式异常，默认返回 "08:30"
+    """
+    if not raw_time or not str(raw_time).strip():
+        return "08:30"
+    t = str(raw_time).strip().replace("：", ":").replace(".", ":").replace("。", ":")
+    if ":" in t:
+        parts = t.split(":")
+        try:
+            h = int(parts[0])
+            m = int(parts[1]) if len(parts) > 1 and parts[1].strip() else 0
+            if len(parts) > 1 and len(parts[1].strip()) == 1 and parts[1].strip() == "3":
+                m = 30
+            return f"{h:02d}:{m:02d}"
+        except Exception:
+            return "08:30"
+    elif t.isdigit():
+        val = int(t)
+        if len(t) <= 2:
+            return f"{val:02d}:00"
+        elif len(t) == 3:
+            return f"{int(t[0]):02d}:{int(t[1:]):02d}"
+        elif len(t) == 4:
+            return f"{int(t[:2]):02d}:{int(t[2:]):02d}"
+    return "08:30"
+
+
+def install_task(time_str: str = "08:30"):
     """在 Windows 计划任务中注册每日静默运行任务"""
+    time_str = normalize_time_str(time_str)
     print("\n" + "=" * 60)
     print("⏰ 安装 Windows 每日自动定时打卡任务")
     print("=" * 60)
@@ -130,7 +165,7 @@ def install_task(time_str: str = "09:00"):
     vbs_path.write_text(vbs_content, encoding="ascii")
 
     task_bat = ROOT_DIR / "run_task.bat"
-    bat_content = '@echo off\ncd /d "%~dp0"\ncall run.bat --headless --no-browse30\n'
+    bat_content = '@echo off\ncd /d "%~dp0"\ncall run.bat --headless\n'
     task_bat.write_text(bat_content, encoding="ascii")
 
     print(f"正在配置定时打卡任务: 每日 {time_str} 执行...")
@@ -227,14 +262,14 @@ def setup_wizard():
 
     # 3. 安装计划任务
     print("\n[步骤 3/3] 安装 Windows 每日自动静默打卡任务...")
-    time_input = input("请输入每日自动运行时间 (24小时制 HH:mm，直接回车默认 09:00): ").strip()
+    time_input = input("请输入每日自动运行时间 (格式如 8.30 或 08:30，直接回车默认 8.30): ").strip()
     if not time_input:
-        time_input = "09:00"
+        time_input = "8.30"
     install_task(time_input)
 
     print("\n" + "★" * 60)
     print("🎉 新电脑配置全部完成！")
-    print(f"   从明天起，您的电脑每天将在 {time_input} 自动完成打卡。")
+    print(f"   从明天起，您的电脑每天将在 {normalize_time_str(time_input)} 自动完成打卡。")
     print("   您可以随时双击运行【查看运行日志.bat】查看积分增加情况。")
     print("★" * 60 + "\n")
 

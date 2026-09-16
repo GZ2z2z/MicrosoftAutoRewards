@@ -52,6 +52,7 @@ def main():
     parser.add_argument("--claim", action="store_true", help="仅检查并领取待入账积分")
     parser.add_argument("--login", action="store_true", help="仅打开浏览器供首次登录微软账号并保存会话")
     parser.add_argument("--clean", action="store_true", help="清理临时缓存垃圾")
+    parser.add_argument("--time", type=str, default=None, help="定时任务执行时间 (例如 8.30 或 08:30，默认 08:30)")
     parser.add_argument("--install-task", action="store_true", help="安装 Windows 每日自动静默打卡任务")
     parser.add_argument("--uninstall-task", action="store_true", help="卸载 Windows 每日定时打卡任务")
     parser.add_argument("--view-log", action="store_true", help="查看运行日志")
@@ -64,7 +65,7 @@ def main():
         clean_edge_cache()
         return
     if args.install_task:
-        install_task()
+        install_task(time_str=args.time or "08:30")
         return
     if args.uninstall_task:
         uninstall_task()
@@ -123,7 +124,8 @@ def main():
         elif choice == "7":
             args.login = True
         elif choice == "8":
-            install_task()
+            time_input = input("请输入每日自动打卡时间 (格式如 8.30 或 08:30，直接回车默认 8.30): ").strip()
+            install_task(time_str=time_input or "08:30")
             return
         elif choice == "9":
             uninstall_task()
