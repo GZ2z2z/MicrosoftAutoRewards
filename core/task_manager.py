@@ -21,6 +21,73 @@ if sys.platform == "win32":
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
+class SingleInstanceLock:
+    """
+    跨进程文件互斥锁，确保同一时刻只有一个打卡任务访问浏览器数据目录
+    防止多开进程抢占 profile 导致 session 中断或进程互杀
+    """
+    def __init__(self, lock_file: Optional[Path] = None):
+        self.lock_file = lock_file or (ROOT_DIR / "data" / "runner.lock")
+        self.lock_handle = None
+
+    def acquire(self) -> bool:
+        self.lock_file.parent.mkdir(parents=True, exist_ok=True)
+        if sys.platform == "win32":
+            import msvcrt
+            try:
+                mode = "r+" if self.lock_file.exists() else "w+"
+                self.lock_handle = open(self.lock_file, mode)
+                self.lock_handle.seek(0)
+                msvcrt.locking(self.lock_handle.fileno(), msvcrt.LK_NBLCK, 1)
+                self.lock_handle.seek(0)
+                self.lock_handle.truncate()
+                self.lock_handle.write(str(os.getpid()))
+                self.lock_handle.flush()
+                return True
+            except (IOError, OSError):
+                return False
+        else:
+            import fcntl
+            try:
+                self.lock_handle = open(self.lock_file, "a+")
+                fcntl.flock(self.lock_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                self.lock_handle.seek(0)
+                self.lock_handle.truncate()
+                self.lock_handle.write(str(os.getpid()))
+                self.lock_handle.flush()
+                return True
+            except (IOError, OSError):
+                return False
+
+    def get_owner_pid(self) -> Optional[int]:
+        try:
+            if self.lock_file.exists():
+                txt = self.lock_file.read_text(encoding="utf-8").strip()
+                return int(txt) if txt.isdigit() else None
+        except Exception:
+            pass
+        return None
+
+    def release(self):
+        if self.lock_handle:
+            try:
+                if sys.platform == "win32":
+                    import msvcrt
+                    self.lock_handle.seek(0)
+                    msvcrt.locking(self.lock_handle.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+                    fcntl.flock(self.lock_handle, fcntl.LOCK_UN)
+                self.lock_handle.close()
+            except Exception:
+                pass
+            self.lock_handle = None
+            try:
+                self.lock_file.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+
 def clean_edge_cache():
     """清理浏览器运行时临时缓存，保持体积极致小巧并保留登录凭据"""
     print("\n" + "=" * 60)

@@ -878,6 +878,13 @@ class RewardsDashboard:
                         fi.send_keys(str(test_img.resolve()))
                         uploaded = True
                         print(f"  ✓ 已通过上传图像触发视觉搜索: {test_img.name}")
+                        try:
+                            self.driver.execute_script("""
+                                arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
+                                arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
+                            """, fi)
+                        except Exception:
+                            pass
                         break
                     except Exception:
                         pass

@@ -188,10 +188,14 @@ def run_edge_30min_browsing(driver, max_minutes: int = 35, target_minutes: int =
                 print(f"  ⚠️ 进度核验微异常 (继续浏览): {e}")
 
     # 最终结算核验
-    driver.get(EARN_URL)
-    time.sleep(4)
-    final_prog = get_edge_browsing_progress(driver)
-    if final_prog:
-        print(f"✓ 最终 Edge 浏览打卡进度: {final_prog['current']}/{final_prog['target']} 分钟")
-        return final_prog.get("is_done", False)
+    try:
+        driver.get(EARN_URL)
+        time.sleep(4)
+        final_prog = get_edge_browsing_progress(driver)
+        if final_prog:
+            print(f"✓ 最终 Edge 浏览打卡进度: {final_prog['current']}/{final_prog['target']} 分钟")
+            return final_prog.get("is_done", False)
+    except Exception as e:
+        print(f"  ⚠️ 最终进度核验微异常: {e}")
     return True
+

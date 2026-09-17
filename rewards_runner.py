@@ -22,7 +22,7 @@ from core.browser import get_edge_driver, get_browser_driver, detect_available_b
 from core.dashboard import RewardsDashboard
 from core.searcher import BingSearcher
 from core.edge_browse import run_edge_30min_browsing, get_edge_browsing_progress
-from core.task_manager import clean_edge_cache, install_task, uninstall_task, view_logs, setup_wizard, create_portable_package
+from core.task_manager import clean_edge_cache, install_task, uninstall_task, view_logs, setup_wizard, create_portable_package, SingleInstanceLock
 
 class AutoLogger:
     def __init__(self, filepath):
@@ -155,6 +155,18 @@ def main():
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 开始执行 Microsoft Rewards 后台静默任务")
         print("=" * 60)
 
+    # 跨进程单例锁：确保同一时刻只有一个打卡任务访问浏览器数据目录，防止并发破坏 session
+    runner_lock = SingleInstanceLock()
+    if not runner_lock.acquire():
+        owner_pid = runner_lock.get_owner_pid()
+        print("\n" + "=" * 60)
+        print("⚠️ 检测到另一个 Microsoft Rewards 自动化打卡任务正在运行中！")
+        if owner_pid:
+            print(f"   占用进程 PID: {owner_pid}")
+        print("   为防止浏览器会话冲突与配置文件损坏，本次启动已自动安全退出。")
+        print("=" * 60 + "\n")
+        return
+
     # 首次引导登录模式强制禁用无头
     is_headless = args.headless and not args.login
 
@@ -246,6 +258,7 @@ def main():
             except Exception:
                 pass
             print("🔒 浏览器会话已安全释放。")
+        runner_lock.release()
 
 if __name__ == "__main__":
     main()
