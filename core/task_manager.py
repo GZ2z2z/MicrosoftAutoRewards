@@ -186,9 +186,10 @@ def install_task(time_str: Optional[str] = None):
 
     ps_script = f"""
     $scriptPath = "{vbs_path.resolve()}"
-    $action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument ('"' + $scriptPath + '"')
+    $workDir = "{ROOT_DIR.resolve()}"
+    $action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument ('"' + $scriptPath + '"') -WorkingDirectory $workDir
     $trigger = New-ScheduledTaskTrigger -Daily -At "{time_str}"
-    $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 1)
+    $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -WakeToRun -ExecutionTimeLimit (New-TimeSpan -Hours 2)
     Register-ScheduledTask -TaskName "MicrosoftRewards_DailyAuto" -Action $action -Trigger $trigger -Settings $settings -Force | Out-Null
     """
     res = subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script], capture_output=True, text=True)
@@ -198,7 +199,8 @@ def install_task(time_str: Optional[str] = None):
         print("✓ Windows 计划任务 [MicrosoftRewards_DailyAuto] 安装成功！")
         print(f"  • 每日运行时间: {time_str}")
         print("  • 运行模式: 后台完全静默运行 (无控制台黑框、无弹窗)")
-        print("  • 自动补跑: 若电脑在打卡时间关机，开机登录后会自动立即补跑！")
+        print("  • 睡眠唤醒: 支持电脑睡眠自动唤醒执行 (WakeToRun)")
+        print("  • 自动补跑: 若电脑在打卡时间处于关机状态，开机后系统会自动排队补跑！")
         print("=" * 60 + "\n")
         return True
     else:
